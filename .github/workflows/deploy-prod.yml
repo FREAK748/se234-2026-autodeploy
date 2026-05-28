@@ -10,7 +10,6 @@ jobs:
       - name: check out the code to build server
         uses: actions/checkout@v3
 
-      # ========== Ubuntu 24+ 必须添加此步骤 ==========
       - name: set the ubuntu user as the owner of the /var/www/html directory for ubuntu 24+
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -19,7 +18,6 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           script: |
             sudo chown -R ubuntu /var/www/html
-      # ==============================================
 
       - name: copy file to server
         uses: appleboy/scp-action@master
@@ -32,7 +30,6 @@ jobs:
           target: "/var/www/html"
           strip_components: 1
 
-      # ========== Ubuntu 24+ 必须添加此步骤 ==========
       - name: set the root user back as the owner of the /var/www/html directory for ubuntu 24+
         uses: appleboy/ssh-action@v1.2.0
         with:
@@ -41,4 +38,3 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           script: |
             sudo chown -R root /var/www/html
-      # ==============================================
