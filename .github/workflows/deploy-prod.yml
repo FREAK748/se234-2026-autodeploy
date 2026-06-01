@@ -1,6 +1,8 @@
+# 区别1：名称不同
 name: Deploy to Production
 on:
   push:
+    # 区别2：触发分支不同
     branches:
       - prod
 
@@ -14,10 +16,13 @@ jobs:
       - name: Deploy to server
         uses: appleboy/ssh-action@v1.2.0
         with:
+          # 区别3：使用的HOST机密不同
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.SSH_USER_NAME }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
+          script_stop: true
+          command_timeout: 60s
           script: |
             sudo rm -rf /var/www/html/*
             sudo chown -R $USER:$USER /var/www/html
@@ -25,6 +30,7 @@ jobs:
       - name: Copy files
         uses: appleboy/scp-action@v0.1.7
         with:
+          # 区别3：使用的HOST机密不同
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.SSH_USER_NAME }}
           key: ${{ secrets.SSH_KEY }}
@@ -32,14 +38,18 @@ jobs:
           source: "html/*"
           target: "/var/www/html"
           strip_components: 1
+          timeout: 60s
 
       - name: Set permissions back
         uses: appleboy/ssh-action@v1.2.0
         with:
+          # 区别3：使用的HOST机密不同
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.SSH_USER_NAME }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
+          script_stop: true
+          command_timeout: 60s
           script: |
             sudo chown -R www-data:www-data /var/www/html
             sudo systemctl restart nginx
