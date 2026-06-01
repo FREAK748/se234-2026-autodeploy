@@ -1,55 +1,35 @@
-# 区别1：名称不同
 name: Deploy to Production
 on:
   push:
-    # 区别2：触发分支不同
-    branches:
-      - prod
+    branches: [ prod ]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Deploy to server
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          # 区别3：使用的HOST机密不同
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.SSH_USER_NAME }}
-          key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT }}
-          script_stop: true
-          command_timeout: 60s
-          script: |
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H 54.242.60.113 >> ~/.ssh/known_hosts
+
+      - name: Prepare server
+        run: |
+          ssh -o ConnectTimeout=120 -o ServerAliveInterval=30 -o ServerAliveCountMax=4 ubuntu@54.242.60.113 "
             sudo rm -rf /var/www/html/*
-            sudo chown -R $USER:$USER /var/www/html
+            sudo chown -R ubuntu:ubuntu /var/www/html
+          "
 
-      - name: Copy files
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          # 区别3：使用的HOST机密不同
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.SSH_USER_NAME }}
-          key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT }}
-          source: "html/*"
-          target: "/var/www/html"
-          strip_components: 1
-          timeout: 60s
+      - name: Upload files
+        run: |
+          scp -o ConnectTimeout=120 html/* ubuntu@54.242.60.113:/var/www/html/
 
-      - name: Set permissions back
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          # 区别3：使用的HOST机密不同
-          host: ${{ secrets.PROD_HOST }}
-          username: ${{ secrets.SSH_USER_NAME }}
-          key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT }}
-          script_stop: true
-          command_timeout: 60s
-          script: |
+      - name: Finalize
+        run: |
+          ssh -o ConnectTimeout=120 ubuntu@54.242.60.113 "
             sudo chown -R www-data:www-data /var/www/html
             sudo systemctl restart nginx
+          "
