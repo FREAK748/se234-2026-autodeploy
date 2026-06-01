@@ -9,27 +9,67 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure SSH
+      - name: Configure SSH and install tools
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H 54.242.60.113 >> ~/.ssh/known_hosts
+          sudo apt update && sudo apt install -y netcat-openbsd
 
-      - name: Prepare server
+      - name: Pre-check port 22 connectivity
         run: |
-          ssh -o ConnectTimeout=120 -o ServerAliveInterval=30 -o ServerAliveCountMax=4 ubuntu@54.242.60.113 "
-            sudo rm -rf /var/www/html/*
-            sudo chown -R ubuntu:ubuntu /var/www/html
-          "
+          echo "Checking if port 22 is open on 54.242.60.113..."
+          for i in {1..5}; do
+            nc -zv -w 10 54.242.60.113 22 && break
+            echo "Attempt $i failed, retrying in 10 seconds..."
+            sleep 10
+          done
 
-      - name: Upload files
+      - name: Prepare server (with 5 retries)
         run: |
-          scp -o ConnectTimeout=120 html/* ubuntu@54.242.60.113:/var/www/html/
+          for i in {1..5}; do
+            echo "Attempt $i to connect to production server..."
+            ssh -o ConnectTimeout=180 \
+                -o ServerAliveInterval=15 \
+                -o ServerAliveCountMax=10 \
+                -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                ubuntu@54.242.60.113 "
+                  echo 'Connected successfully, preparing server...'
+                  sudo rm -rf /var/www/html/*
+                  sudo chown -R ubuntu:ubuntu /var/www/html
+                  echo 'Server preparation completed'
+                " && break
+            echo "Attempt $i failed, retrying in 15 seconds..."
+            sleep 15
+          done
 
-      - name: Finalize
+      - name: Upload files (with 5 retries)
         run: |
-          ssh -o ConnectTimeout=120 ubuntu@54.242.60.113 "
-            sudo chown -R www-data:www-data /var/www/html
-            sudo systemctl restart nginx
-          "
+          for i in {1..5}; do
+            echo "Attempt $i to upload files..."
+            scp -o ConnectTimeout=180 \
+                -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                html/* ubuntu@54.242.60.113:/var/www/html/ && break
+            echo "Attempt $i failed, retrying in 15 seconds..."
+            sleep 15
+          done
+
+      - name: Finalize deployment (with 5 retries)
+        run: |
+          for i in {1..5}; do
+            echo "Attempt $i to finalize deployment..."
+            ssh -o ConnectTimeout=180 \
+                -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                ubuntu@54.242.60.113 "
+                  echo 'Setting permissions...'
+                  sudo chown -R www-data:www-data /var/www/html
+                  echo 'Restarting Nginx...'
+                  sudo systemctl restart nginx
+                  echo 'Deployment completed successfully'
+                " && break
+            echo "Attempt $i failed, retrying in 15 seconds..."
+            sleep 15
+          done
